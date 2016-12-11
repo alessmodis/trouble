@@ -1,0 +1,6 @@
+{
+    "version": "0.1",
+    "description": "SCSS trouble parser",
+    "license": "MIT",
+    "author": {"name": "Aleš Smodiš", "email": "aless@guru.si"}
+}
