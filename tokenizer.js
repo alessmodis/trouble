@@ -160,7 +160,7 @@ function isUnit(c) {
     return c in units;
 }
 
-var BOF = new ScssSymbol(''), // left sentinel when we start parsing
+var BOF = new ScssSymbol(''), // left sentinel for when we start parsing
     // symbols
     LBRACE = new ScssSymbol('{'),
     RBRACE = new ScssSymbol('}'),
@@ -170,11 +170,11 @@ var BOF = new ScssSymbol(''), // left sentinel when we start parsing
     LPAREN = new ScssSymbol('('),
     RPAREN = new ScssSymbol(')'),
     // numerical operators
-    PlUS = new ScssOperator('+'), // also combinator in adjacent sibling selectors
+    PLUS = new ScssOperator('+'), // also combinator in adjacent sibling selectors
     MINUS = new ScssOperator('-'),
     NEGATION = new ScssOperator('-'),
     ASTERISK = new ScssOperator('*'), // also universal selector
-    SLASH = new ScssOperator('/'),
+    SLASH = new ScssOperator('/'), // also a combinator in shorthand values of properties
     PERCENT = new ScssOperator('%'),
     // relational operators
     EQUAL = new ScssOperator('=='),
@@ -232,7 +232,7 @@ var Tokenizer = defineClass(function(data) {
         return data[pos + (offset || 0)];
     }
 
-    function singleLineComment() { // TODO: interpolated comment
+    function singleLineComment() {
         var commentStart = pos - 1, c;
         getChar(); // skip the second '/'
         for (c = getChar(); c && (c !== '\n'); c = getChar());
@@ -288,7 +288,7 @@ var Tokenizer = defineClass(function(data) {
 
         function primitiveString() {
             var result;
-            while (pos < size) {
+            while (getChar() !== quote) {
                 if (!currentChar || (currentChar === '\n')) throw new ParseError(realLastLine, realLastColumn, 'Unterminated string');
                 if (currentChar === '\\') { // escape character
                     if (getChar() !== '\n') { // not a line continuation?
@@ -305,21 +305,22 @@ var Tokenizer = defineClass(function(data) {
             return new ScssPrimitiveString(result);
         }
 
-        getChar(); // skip the starting quote
-        // first try to assemble a primitive string
+        // first try to assemble a primitive string; here it's currentChar === quote
         t = primitiveString();
         if (currentChar === quote) return t; // no interpolation inside this string
         // assemble an interpolated string, consisting of a list of primitive strings separated by expressions
         tokenList = [t];
         getChar(); // skip the '{'
         expr = [];
+        lastToken = BOF;
         while (t = nextToken()) {
-            if (t === RBRACE) {
+            if (t === RBRACE) { // the parser should catch an empty interpolation and raise an exception
                 tokenList.push(expr);
-                t = primitiveString();
-                tokenList.push(t);
+                tokenList.push(primitiveString()); // before primitiveString() is invoked it's currentChar === '}'
                 if (currentChar === quote) return new ScssInterpolatedString(tokenList);
+                getChar(); // skip the '{'
                 expr = [];
+                lastToken = BOF;
             }
             else {
                 expr.push(t);
@@ -352,7 +353,7 @@ var Tokenizer = defineClass(function(data) {
             case ':': return COLON;
             case ';': return SEMICOLON;
             case ',': return COMMA;
-            case '+': return PlUS;
+            case '+': return PLUS;
             case '*':
                 if (peekChar() === '=') {
                     getChar();
